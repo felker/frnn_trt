@@ -48,6 +48,9 @@ public:
     FRNN(const samplesCommon::OnnxSampleParams& params)
         : mParams(params)
         , mEngine(nullptr)
+          // KGF: new stuff
+        , context(nullptr)
+        , buffers(nullptr)
     {
     }
 
@@ -55,6 +58,10 @@ public:
     //! \brief Function builds the network engine
     //!
     bool build();
+    //!
+    //! \brief Allocate input/output tensor buffers and execution context
+    //!
+    bool allocate();
 
     //!
     //! \brief Runs the TensorRT inference engine for this sample
@@ -68,7 +75,14 @@ private:
     nvinfer1::Dims mOutputDims; //!< The dimensions of the output to the network.
     int mNumber{0};             //!< The number to classify
 
-    std::shared_ptr<nvinfer1::ICudaEngine> mEngine; //!< The TensorRT engine used to run the network
+    std::shared_ptr<nvinfer1::ICudaEngine> mEngine; //!< The TensorRT engine used to run
+                                                    //!the network
+
+    // KGF: make these persistent between infer() calls:
+    // IExecutionContext *context;
+    SampleUniquePtr<nvinfer1::IExecutionContext> context;
+    // samplesCommon::BufferManager buffers;
+    std::shared_ptr<samplesCommon::BufferManager> buffers;
 
     //!
     //! \brief Parses an ONNX model and creates a TensorRT network
@@ -190,44 +204,63 @@ bool FRNN::constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
     return true;
 }
 
+
+bool FRNN::allocate()
+{
+  // Create RAII buffer manager object
+  buffers = std::shared_ptr<samplesCommon::BufferManager>(new samplesCommon::BufferManager(mEngine));
+  if (!buffers)
+  {
+    return false;
+  }
+  context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
+  if (!context)
+  {
+    return false;
+  }
+  return true;
+}
+
+
 //!
 //! \brief Runs the TensorRT inference engine for this sample
 //!
 //! \details This function is the main execution function of the sample. It allocates the buffer,
 //!          sets inputs and executes the engine.
 //!
+//bool FRNN::infer(IExecutionContext *context, samplesCommon::BufferManager buffers)
 bool FRNN::infer()
 {
     // Create RAII buffer manager object
-    samplesCommon::BufferManager buffers(mEngine);
+    //    samplesCommon::BufferManager buffers(mEngine);
 
-    auto context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
-    if (!context)
-    {
-        return false;
-    }
+    // auto context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
+    // if (!context)
+    // {
+    //     return false;
+    // }
 
     // Read the input data into the managed buffers
     ASSERT(mParams.inputTensorNames.size() == 1);
-    if (!processInput(buffers))
+    if (!processInput(*buffers))
     {
         return false;
     }
 
     // Memcpy from host input buffers to device input buffers
-    buffers.copyInputToDevice();
+    buffers->copyInputToDevice();
 
-    bool status = context->executeV2(buffers.getDeviceBindings().data());
+    bool status = context->executeV2(buffers->getDeviceBindings().data());
     if (!status)
     {
         return false;
     }
 
     // Memcpy from device output buffers to host output buffers
-    buffers.copyOutputToHost();
+    buffers->copyOutputToHost();
 
     // Verify results
-    if (!verifyOutput(buffers))
+    if (!verifyOutput(*buffers))
     {
         return false;
     }
@@ -261,7 +294,7 @@ bool FRNN::processInput(const samplesCommon::BufferManager& buffers)
     // }
     // sample::gLogInfo << std::endl;
 
-    float* hostDataBuffer = static_cast<float*>(buffers.getHostBuffer(mParams.inputTensorNames[0]));
+    float* hostDataBuffer = static_cast<float*>(buffers->getHostBuffer(mParams.inputTensorNames[0]));
     // KGF: is input0, batch size, automatically ignored when the data buffers are allocated?
     for (int i = 0; i < input1*input2; i++)
     {
@@ -385,6 +418,25 @@ int main(int argc, char** argv)
     {
         return sample::gLogger.reportFail(sampleTest);
     }
+    // KGF: try relocating input/output tensor buffer allocation and context creation from infer()
+    // Create RAII buffer manager object
+    // samplesCommon::BufferManager buffers(sample.mEngine);
+
+    // auto context = std::unique_ptr<nvinfer1::IExecutionContex, samplesCommon::InferDeleter>(
+    //     sample.mEngine->createExecutionContext());
+    // if (!context
+    // {
+    //     return false;
+    // }
+    //--- end relocated code
+
+    if (!sample.allocate())
+    {
+        return sample::gLogger.reportFail(sampleTest);
+    }
+
+
+    //if (!sample.infer(context, buffers))
     if (!sample.infer())
     {
         return sample::gLogger.reportFail(sampleTest);
