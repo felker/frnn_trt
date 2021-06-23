@@ -1,0 +1,5 @@
+OUTNAME_RELEASE = FRNN
+OUTNAME_DEBUG   = FRNN_debug
+EXTRA_DIRECTORIES = ../common
+MAKEFILE ?= ../Makefile.config
+include $(MAKEFILE)
