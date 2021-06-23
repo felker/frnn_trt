@@ -7,7 +7,8 @@ Sample code and common headers from `TensorRT-8.0.0.3.Linux.x86_64-gnu.cuda-11.3
 - Untar
 - `cd TensorRT-8.0.0.3/`
 - `rm -rfd samples/`
-- Untar the attached FRNN/ folder into that directory
+- `git clone git@github.com:felker/frnn_trt.git`
+- `mv frnn_trt/samples/ .`
 - `make`
 - `cd ../bin/`
 - Copy an `.onnx` file to that directory
