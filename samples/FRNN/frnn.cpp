@@ -294,7 +294,7 @@ bool FRNN::processInput(const samplesCommon::BufferManager& buffers)
     // }
     // sample::gLogInfo << std::endl;
 
-    float* hostDataBuffer = static_cast<float*>(buffers->getHostBuffer(mParams.inputTensorNames[0]));
+    float* hostDataBuffer = static_cast<float*>(buffers.getHostBuffer(mParams.inputTensorNames[0]));
     // KGF: is input0, batch size, automatically ignored when the data buffers are allocated?
     for (int i = 0; i < input1*input2; i++)
     {
