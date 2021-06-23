@@ -32,30 +32,8 @@ export CUDA_TRIPLE
 export CUBLAS_TRIPLE
 export DLSW_TRIPLE
 
-ifeq ($(SAFE_PDK), 1)
-  # Only dlaSafetyRuntime is currently able to execute with safety pdk.
-  samples := dlaSafetyRuntime
-else
-  samples := \
-          FRNN
+samples := FRNN
 
-  # sampleMovieLensMPS should only be compiled for Linux targets.
-  # sample uses Linux specific shared memory and IPC libraries.
-  ifeq ($(TARGET),x86_64)
-    samples += sampleMovieLensMPS
-  endif
-
-  # sampleNvmedia/dlaSafetyRuntime/dlaSafetyBuilder should only be compiled with DLA enabled.
-  ifeq ($(ENABLE_DLA),1)
-    ifneq ($(L4T_BUILD), 1)
-      ifeq ($(ENABLE_NVMEDIA_DLA), 1)
-          samples += sampleNvmedia
-          samples += dlaSafetyRuntime
-      endif
-      samples += dlaSafetyBuilder
-    endif
-  endif
-endif
 
 .PHONY: all clean help
 all:
