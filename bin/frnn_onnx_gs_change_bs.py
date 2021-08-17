@@ -3,6 +3,10 @@ import numpy as np
 import sys
 import onnx
 
+# References
+# https://elinux.org/TensorRT/ONNX#1._Make_dynamic
+# https://docs.nvidia.com/deeplearning/tensorrt/onnx-graphsurgeon/docs/ir/node.html#
+
 graph = gs.import_onnx(onnx.load("./input.onnx"))
 tensors = graph.tensors()
 #nodes = graph.nodes
