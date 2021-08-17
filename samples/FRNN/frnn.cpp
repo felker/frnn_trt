@@ -432,22 +432,27 @@ int main(int argc, char** argv)
     // }
     //--- end relocated code
 
+    clock_t begin_allocate = clock();
     if (!sample.allocate())
     {
         return sample::gLogger.reportFail(sampleTest);
     }
 
-    clock_t begin = clock();
+    clock_t begin_infer = clock();
     //if (!sample.infer(context, buffers))
     if (!sample.infer())
     {
         return sample::gLogger.reportFail(sampleTest);
     }
     clock_t end = clock();
-    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    double elapsed_secs = double(end - begin_infer) / CLOCKS_PER_SEC;
     double elapsed_ms = elapsed_secs*1000;
+
+    double allocate_ms = double(begin_infer - begin_allocate) / CLOCKS_PER_SEC*1000;
     std::cout << std::scientific << std::setprecision(15);
+    std::cout << "allocate() elapsed " << allocate_ms << " ms\n";
     std::cout << "infer() elapsed " << elapsed_ms << " ms\n";
+
 
     return sample::gLogger.reportPass(sampleTest);
 }
