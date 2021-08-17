@@ -367,7 +367,7 @@ samplesCommon::OnnxSampleParams initializeSampleParams(const samplesCommon::Args
     {
         params.dataDirs = args.dataDirs;
     }
-    params.onnxFileName = "model.45697147745947972659449730707519633821._epoch_.1.onnx";
+    params.onnxFileName = "input.onnx"
     // KGF: inspect the ONNX model (e.g. with Netron) to get the names of these tensors
     params.inputTensorNames.push_back("input_2");
     params.outputTensorNames.push_back("time_distributed");
