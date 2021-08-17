@@ -33,6 +33,8 @@
 #include <iostream>
 #include <sstream>
 
+#include <ctime>
+
 const std::string gSampleName = "FRNN";
 
 //! \brief  The FRNN class implements the LSTM network
@@ -435,12 +437,17 @@ int main(int argc, char** argv)
         return sample::gLogger.reportFail(sampleTest);
     }
 
-
+    clock_t begin = clock();
     //if (!sample.infer(context, buffers))
     if (!sample.infer())
     {
         return sample::gLogger.reportFail(sampleTest);
     }
+    clock_t end = clock();
+    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    double elapsed_ms = elapsed_secs*1000;
+    std::cout << std::scientific << std::setprecision(15);
+    std::cout << "infer() elapsed " << elapsed_ms << " ms\n";
 
     return sample::gLogger.reportPass(sampleTest);
 }
