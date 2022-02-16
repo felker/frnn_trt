@@ -19,14 +19,23 @@
 //! Command: ./frnn [-h or --help] [-d=/path/to/data/dir or --datadir=/path/to/data/dir]
 //!
 
+/*
+#include <ntrace.h>
+__attribute__((constructor)) void ncsInitializeNightTrace() {
+        ntconfig_t config;
+        trace_default_config(&config);
+        trace_begin("/dev/shm/nt", &config);
+}
+*/
+
 #include "argsParser.h"
 #include "buffers.h"
 #include "common.h"
 #include "logger.h"
 #include "parserOnnxConfig.h"
 
-#include "NvInfer.h"
 #include <cuda_runtime_api.h>
+#include "NvInfer.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -46,15 +55,15 @@ class FRNN
     template <typename T>
     using SampleUniquePtr = std::unique_ptr<T, samplesCommon::InferDeleter>;
 
-public:
-    FRNN(const samplesCommon::OnnxSampleParams& params)
-        : mParams(params)
-        , mEngine(nullptr)
-          // KGF: new stuff
-        , context(nullptr)
-        , buffers(nullptr)
-    {
-    }
+  public:
+    FRNN(const samplesCommon::OnnxSampleParams& params) :
+      mParams(params),
+      mEngine(nullptr)
+      // KGF: new stuff
+      ,
+      context(nullptr),
+      buffers(nullptr)
+    {}
 
     //!
     //! \brief Function builds the network engine
@@ -70,15 +79,15 @@ public:
     //!
     bool infer();
 
-private:
-    samplesCommon::OnnxSampleParams mParams; //!< The parameters for the sample.
+  private:
+    samplesCommon::OnnxSampleParams mParams;  //!< The parameters for the sample.
 
-    nvinfer1::Dims mInputDims;  //!< The dimensions of the input to the network.
-    nvinfer1::Dims mOutputDims; //!< The dimensions of the output to the network.
-    int mNumber{0};             //!< The number to classify
+    nvinfer1::Dims mInputDims;   //!< The dimensions of the input to the network.
+    nvinfer1::Dims mOutputDims;  //!< The dimensions of the output to the network.
+    int mNumber{0};              //!< The number to classify
 
-    std::shared_ptr<nvinfer1::ICudaEngine> mEngine; //!< The TensorRT engine used to run
-                                                    //!the network
+    std::shared_ptr<nvinfer1::ICudaEngine> mEngine;  //!< The TensorRT engine used to run
+                                                     //! the network
 
     // KGF: make these persistent between infer() calls:
     // IExecutionContext *context;
@@ -90,8 +99,9 @@ private:
     //! \brief Parses an ONNX model and creates a TensorRT network
     //!
     bool constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
-        SampleUniquePtr<nvinfer1::INetworkDefinition>& network, SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-        SampleUniquePtr<nvonnxparser::IParser>& parser);
+                          SampleUniquePtr<nvinfer1::INetworkDefinition>& network,
+                          SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
+                          SampleUniquePtr<nvonnxparser::IParser>& parser);
 
     //!
     //! \brief Reads the input and stores the result in a managed buffer
@@ -121,7 +131,7 @@ bool FRNN::build()
     }
 
     const auto explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-    auto network = SampleUniquePtr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
+    auto network             = SampleUniquePtr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
     if (!network)
     {
         return false;
@@ -133,8 +143,8 @@ bool FRNN::build()
         return false;
     }
 
-    auto parser
-        = SampleUniquePtr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, sample::gLogger.getTRTLogger()));
+    auto parser =
+        SampleUniquePtr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, sample::gLogger.getTRTLogger()));
     if (!parser)
     {
         return false;
@@ -146,8 +156,8 @@ bool FRNN::build()
         return false;
     }
 
-    mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(
-        builder->buildEngineWithConfig(*network, *config), samplesCommon::InferDeleter());
+    mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(builder->buildEngineWithConfig(*network, *config),
+                                                     samplesCommon::InferDeleter());
     if (!mEngine)
     {
         return false;
@@ -165,6 +175,13 @@ bool FRNN::build()
 
     sample::gLogInfo << "mOutputDims.nbDims = " << mOutputDims.nbDims << std::endl;
 
+    // Export this the ICudaEngine to a file frnn.engine
+    IHostMemory* serialized_model(mEngine->serialize());
+    std::ofstream f("frnn.engine", std::ios::binary);
+    f.write(reinterpret_cast<char*>(serialized_model->data()), serialized_model->size());
+    serialized_model->destroy();
+    std::cout << "frnn.engine exported to local path" << std::endl;
+
     return true;
 }
 
@@ -177,11 +194,12 @@ bool FRNN::build()
 //! \param builder Pointer to the engine builder
 //!
 bool FRNN::constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
-    SampleUniquePtr<nvinfer1::INetworkDefinition>& network, SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-    SampleUniquePtr<nvonnxparser::IParser>& parser)
+                            SampleUniquePtr<nvinfer1::INetworkDefinition>& network,
+                            SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
+                            SampleUniquePtr<nvonnxparser::IParser>& parser)
 {
     auto parsed = parser->parseFromFile(locateFile(mParams.onnxFileName, mParams.dataDirs).c_str(),
-        static_cast<int>(sample::gLogger.getReportableSeverity()));
+                                        static_cast<int>(sample::gLogger.getReportableSeverity()));
     if (!parsed)
     {
         return false;
@@ -190,8 +208,7 @@ bool FRNN::constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
     // KGF: despite README's instructions, this function is not implemented
     // parser->reportParsingInfo();
 
-
-    config->setMaxWorkspaceSize(1024_MiB);//16_MiB);
+    config->setMaxWorkspaceSize(1024_MiB);  // 16_MiB);
     if (mParams.fp16)
     {
         config->setFlag(BuilderFlag::kFP16);
@@ -199,30 +216,28 @@ bool FRNN::constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
     if (mParams.int8)
     {
         config->setFlag(BuilderFlag::kINT8);
-        //samplesCommon::setAllTensorScales(network.get(), 127.0f, 127.0f);
+        // samplesCommon::setAllTensorScales(network.get(), 127.0f, 127.0f);
         samplesCommon::setAllDynamicRanges(network.get(), 127.0f, 127.0f);
     }
 
     return true;
 }
 
-
 bool FRNN::allocate()
 {
-  // Create RAII buffer manager object
-  buffers = std::shared_ptr<samplesCommon::BufferManager>(new samplesCommon::BufferManager(mEngine));
-  if (!buffers)
-  {
-    return false;
-  }
-  context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
-  if (!context)
-  {
-    return false;
-  }
-  return true;
+    // Create RAII buffer manager object
+    buffers = std::shared_ptr<samplesCommon::BufferManager>(new samplesCommon::BufferManager(mEngine));
+    if (!buffers)
+    {
+        return false;
+    }
+    context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
+    if (!context)
+    {
+        return false;
+    }
+    return true;
 }
-
 
 //!
 //! \brief Runs the TensorRT inference engine for this sample
@@ -230,7 +245,7 @@ bool FRNN::allocate()
 //! \details This function is the main execution function of the sample. It allocates the buffer,
 //!          sets inputs and executes the engine.
 //!
-//bool FRNN::infer(IExecutionContext *context, samplesCommon::BufferManager buffers)
+// bool FRNN::infer(IExecutionContext *context, samplesCommon::BufferManager buffers)
 bool FRNN::infer()
 {
     // Create RAII buffer manager object
@@ -260,6 +275,7 @@ bool FRNN::infer()
 
     // Memcpy from device output buffers to host output buffers
     buffers->copyOutputToHost();
+    // trace_event(2);
 
     // Verify results
     if (!verifyOutput(*buffers))
@@ -275,12 +291,13 @@ bool FRNN::infer()
 //!
 bool FRNN::processInput(const samplesCommon::BufferManager& buffers)
 {
-  // 256, 128, 14
+    // 256, 128, 14
     const int input0 = mInputDims.d[0];
     const int input1 = mInputDims.d[1];
     const int input2 = mInputDims.d[2];
 
-    // sample::gLogInfo << "Input dims: input0,input1,input2 = " << input0 << "," << input1 << "," << input2 << std::endl;
+    // sample::gLogInfo << "Input dims: input0,input1,input2 = " << input0 << "," << input1 << "," << input2 <<
+    // std::endl;
 
     // Read a random digit file
     // srand(unsigned(time(nullptr)));
@@ -298,9 +315,9 @@ bool FRNN::processInput(const samplesCommon::BufferManager& buffers)
 
     float* hostDataBuffer = static_cast<float*>(buffers.getHostBuffer(mParams.inputTensorNames[0]));
     // KGF: is input0, batch size, automatically ignored when the data buffers are allocated?
-    for (int i = 0; i < input1*input2; i++)
+    for (int i = 0; i < input1 * input2; i++)
     {
-      hostDataBuffer[i] = 1.0;
+        hostDataBuffer[i] = 1.0;
         // hostDataBuffer[i] = 1.0 - float(fileData[i] / 255.0);
     }
 
@@ -314,11 +331,12 @@ bool FRNN::processInput(const samplesCommon::BufferManager& buffers)
 //!
 bool FRNN::verifyOutput(const samplesCommon::BufferManager& buffers)
 {
-  // KGF: same question as above: is d[0] (batch size) implicitly ignored, or assumed to
-  // be 1?
+    // KGF: same question as above: is d[0] (batch size) implicitly ignored, or assumed to
+    // be 1?
     const int outputSize = mOutputDims.d[1];
     // 256, 128, 1
-    sample::gLogInfo << "Output dims: output0,output1,output2 = " << mOutputDims.d[0] << "," << mOutputDims.d[1] << "," << mOutputDims.d[2] << std::endl;
+    sample::gLogInfo << "Output dims: output0,output1,output2 = " << mOutputDims.d[0] << "," << mOutputDims.d[1] << ","
+                     << mOutputDims.d[2] << std::endl;
 
     float* output = static_cast<float*>(buffers.getHostBuffer(mParams.outputTensorNames[0]));
     // float val{0.0f};
@@ -342,7 +360,8 @@ bool FRNN::verifyOutput(const samplesCommon::BufferManager& buffers)
         //     idx = i;
         // }
 
-        sample::gLogInfo << " Prob " << i << "  " << std::fixed << std::setw(5) << std::setprecision(4) << output[i]
+        sample::gLogInfo << " Prob " << i << "  " << std::fixed << std::setw(5) << std::setprecision(4)
+                         << output[i]
                          // << " "
                          // << "Class " << i << ": " << std::string(int(std::floor(output[i] * 10 + 0.5f)), '*')
                          << std::endl;
@@ -350,7 +369,7 @@ bool FRNN::verifyOutput(const samplesCommon::BufferManager& buffers)
 
     sample::gLogInfo << std::endl;
 
-    return true; // idx == mNumber && val > 0.9f;
+    return true;  // idx == mNumber && val > 0.9f;
 }
 
 //!
@@ -359,11 +378,11 @@ bool FRNN::verifyOutput(const samplesCommon::BufferManager& buffers)
 samplesCommon::OnnxSampleParams initializeSampleParams(const samplesCommon::Args& args)
 {
     samplesCommon::OnnxSampleParams params;
-    if (args.dataDirs.empty()) //!< Use default directories if user hasn't provided directory paths
+    if (args.dataDirs.empty())  //!< Use default directories if user hasn't provided directory paths
     {
         params.dataDirs.push_back("./");
     }
-    else //!< Use the data directory provided by the user
+    else  //!< Use the data directory provided by the user
     {
         params.dataDirs = args.dataDirs;
     }
@@ -382,12 +401,9 @@ samplesCommon::OnnxSampleParams initializeSampleParams(const samplesCommon::Args
 //!
 void printHelpInfo()
 {
-    std::cout
-        << "Usage: ./frnn [-h or --help] [-d or --datadir=<path to ONNX model>]"
-        << std::endl;
+    std::cout << "Usage: ./frnn [-h or --help] [-d or --datadir=<path to ONNX model>]" << std::endl;
     std::cout << "--help          Display help information" << std::endl;
-    std::cout << "--datadir       ONNX model location (and name?)"
-              << std::endl;
+    std::cout << "--datadir       ONNX model location (and name?)" << std::endl;
     std::cout << "--int8          Run in Int8 mode." << std::endl;
     std::cout << "--fp16          Run in FP16 mode." << std::endl;
 }
@@ -420,6 +436,7 @@ int main(int argc, char** argv)
     {
         return sample::gLogger.reportFail(sampleTest);
     }
+
     // KGF: try relocating input/output tensor buffer allocation and context creation from infer()
     // Create RAII buffer manager object
     // samplesCommon::BufferManager buffers(sample.mEngine);
@@ -439,20 +456,21 @@ int main(int argc, char** argv)
     }
 
     clock_t begin_infer = clock();
-    //if (!sample.infer(context, buffers))
+    // if (!sample.infer(context, buffers))
+    // trace_event(1);
     if (!sample.infer())
     {
         return sample::gLogger.reportFail(sampleTest);
     }
-    clock_t end = clock();
+    // trace_event(3);
+    clock_t end         = clock();
     double elapsed_secs = double(end - begin_infer) / CLOCKS_PER_SEC;
-    double elapsed_ms = elapsed_secs*1000;
+    double elapsed_ms   = elapsed_secs * 1000;
 
-    double allocate_ms = double(begin_infer - begin_allocate) / CLOCKS_PER_SEC*1000;
+    double allocate_ms = double(begin_infer - begin_allocate) / CLOCKS_PER_SEC * 1000;
     std::cout << std::scientific << std::setprecision(15);
     std::cout << "allocate() elapsed " << allocate_ms << " ms\n";
     std::cout << "infer() elapsed " << elapsed_ms << " ms\n";
-
 
     return sample::gLogger.reportPass(sampleTest);
 }
